@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Data (large inputs are not committed)
+data/raw/
+data/output/
+*.age

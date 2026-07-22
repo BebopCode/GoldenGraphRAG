@@ -1,0 +1,7 @@
+Ada Lovelace was an English mathematician, born in London in 1815. She is best
+known for her work on Charles Babbage's Analytical Engine. Babbage was a
+polymath and inventor who designed the Analytical Engine in the 1830s. Lovelace
+described an algorithm for the Analytical Engine that is often called the first
+computer program. The Analytical Engine was a mechanical general-purpose
+computer that was never fully built during Babbage's lifetime. London is the
+capital of the United Kingdom.

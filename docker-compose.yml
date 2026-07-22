@@ -1,0 +1,24 @@
+services:
+  age:
+    # Apache AGE = PostgreSQL + the AGE graph extension preinstalled.
+    # Pinned to the latest stable Postgres-16 release build of AGE 1.6.0.
+    # See available tags: https://hub.docker.com/r/apache/age/tags
+    image: apache/age:release_PG16_1.6.0
+    container_name: kg-age
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-kg}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - age_data:/var/lib/postgresql/data
+      - ./docker/init-age.sql:/docker-entrypoint-initdb.d/init-age.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kg} -d ${POSTGRES_DB:-kg}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  age_data:

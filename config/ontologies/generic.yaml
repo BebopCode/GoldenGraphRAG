@@ -1,0 +1,14 @@
+name: generic
+description: Domain-agnostic starter ontology.
+
+node_types:
+  - label: Entity
+    description: A named thing (person, org, place, concept).
+    properties: [name, type, description]
+
+relationship_types:
+  - label: RELATED_TO
+    description: A generic association between two entities.
+    source: Entity
+    target: Entity
+    properties: [description]

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kg-pipeline"
+version = "0.1.0"
+description = "Config-driven pipeline that turns any text dataset into a knowledge graph using a local Ollama model and PostgreSQL + Apache AGE."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "kg-pipeline" }]
+keywords = ["knowledge-graph", "ollama", "apache-age", "graphrag", "extraction"]
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "psycopg[binary]>=3.1",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+kg = "kg.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+# Typer's idiomatic API puts Option()/Argument() in argument defaults.
+"src/kg/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+markers = [
+    "integration: tests that need the AGE container running",
+]
+
+[tool.coverage.run]
+source = ["kg"]
+branch = true

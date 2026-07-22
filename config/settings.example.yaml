@@ -1,0 +1,20 @@
+# Application tuning. Connection secrets/hosts live in .env (see .env.example).
+# Copy to settings.yaml and edit, or rely on the defaults below.
+
+llm:
+  temperature: 0.0          # deterministic extraction
+  json_mode: true           # ask Ollama for strict JSON output
+
+ingest:
+  chunker: structural        # structural | fixed  (also settable via CHUNKER env)
+  fixed:
+    chunk_size: 1200         # characters per chunk (fixed chunker only)
+    chunk_overlap: 200       # overlap between adjacent chunks
+
+extract:
+  batch_size: 8              # chunks processed before a progress flush (logging)
+  max_retries: 1             # retries on malformed JSON before skipping a chunk
+
+fusion:
+  # Off by default; turn on to merge near-duplicate entity names with embeddings.
+  use_embeddings: false

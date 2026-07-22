@@ -1,0 +1,34 @@
+name: constitution_india
+description: Ontology for the Constitution of India.
+
+node_types:
+  - label: Part
+    description: A part of the constitution grouping related articles.
+    properties: [number, title]
+  - label: Article
+    description: A numbered article of the constitution.
+    properties: [number, title, text]
+  - label: Amendment
+    description: A constitutional amendment.
+    properties: [number, year, description]
+  - label: Institution
+    description: A body established by the constitution (e.g. a commission, court).
+    properties: [name, description]
+
+relationship_types:
+  - label: PART_OF
+    description: An article belongs to a part.
+    source: Article
+    target: Part
+  - label: REFERENCES
+    description: One article references another.
+    source: Article
+    target: Article
+  - label: AMENDS
+    description: An amendment modifies an article.
+    source: Amendment
+    target: Article
+  - label: ESTABLISHES
+    description: An article establishes an institution.
+    source: Article
+    target: Institution
