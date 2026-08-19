@@ -75,3 +75,23 @@ def test_edge_to_missing_endpoint_is_skipped(store: AgeGraphStore, caplog) -> No
         "RELATED_TO", {"name": f"Ghost_{uuid.uuid4().hex[:8]}"}, {"name": "AlsoGhost"}, {}
     )
     assert created is False
+
+
+def test_drop_graph_removes_everything(store: AgeGraphStore, project_root) -> None:
+    # Use a scratch graph so the test never touches the real one.
+    from kg.config.loader import load_settings
+
+    suffix = uuid.uuid4().hex[:8]
+    name = f"kg_drop_{suffix}"
+    scratch = AgeGraphStore(load_settings(project_root=project_root).db.dsn, name)
+    try:
+        scratch.init_graph(name)
+        node = f"Drop_{suffix}"
+        scratch.upsert_node("TestThing", {"name": node}, {"kind": "x"})
+        rows = scratch.query(f"MATCH (n:TestThing) WHERE n.name = '{node}' RETURN n")
+        assert len(rows) == 1
+
+        assert scratch.drop_graph(name) is True
+        assert scratch.drop_graph(name) is False, "second drop must be a no-op"
+    finally:
+        scratch.close()

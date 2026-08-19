@@ -1,4 +1,4 @@
-"""Typer CLI entrypoint: ``kg init | ingest | query | info``.
+"""Typer CLI entrypoint: ``kg init | ingest | query | info | delete``.
 
 Imports of heavy collaborators (store, pipeline) are done *inside* the command
 bodies so ``kg --help`` stays fast and doesn't require the DB/LLM to be up.
@@ -44,6 +44,36 @@ def init(
         f"{settings.db.host}:{settings.db.port}/{settings.db.dbname}.",
         fg=typer.colors.GREEN,
     )
+
+
+@app.command()
+def delete(
+    env: Path = typer.Option(None, help="Path to .env (default: project root)."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt (for scripts)."
+    ),
+) -> None:
+    """Delete the AGE graph and everything in it (irreversible)."""
+    from kg.config.loader import load_settings
+    from kg.store.age_store import AgeGraphStore
+
+    settings = load_settings(env_path=env)
+    _setup_logging(settings.log_level)
+    name = settings.db.graph_name
+    if not yes:
+        typer.confirm(
+            f"Permanently delete graph '{name}' on "
+            f"{settings.db.host}:{settings.db.port}/{settings.db.dbname}? "
+            "All nodes and edges will be gone.",
+            abort=True,
+        )
+    store = AgeGraphStore.from_settings(settings)
+    existed = store.drop_graph(name)
+    store.close()
+    if existed:
+        typer.secho(f"Graph '{name}' deleted.", fg=typer.colors.GREEN)
+    else:
+        typer.secho(f"Graph '{name}' did not exist; nothing deleted.", fg=typer.colors.YELLOW)
 
 
 @app.command()

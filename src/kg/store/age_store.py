@@ -215,6 +215,23 @@ class AgeGraphStore(GraphStore):
             else:
                 logger.info("Graph '%s' already exists", name)
 
+    def drop_graph(self, name: str) -> bool:
+        """Drop the named graph and all its vertices/edges; True if it existed.
+
+        Irreversible. Unlike the cypher() path — where the graph name must be
+        inlined as a literal — here it is a plain SQL function argument, so it
+        binds as a parameter.
+        """
+        conn = self._connect()
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = %s;", (name,))
+            if cur.fetchone()[0] == 0:
+                logger.info("Graph '%s' does not exist; nothing to drop.", name)
+                return False
+            cur.execute("SELECT drop_graph(%s, true);", (name,))
+            logger.info("Dropped graph '%s' (cascade).", name)
+            return True
+
     def upsert_node(self, label: str, key: dict, props: dict) -> None:
         """MERGE a node on ``key`` (e.g. ``{"name": ...}``) and SET the props.
 

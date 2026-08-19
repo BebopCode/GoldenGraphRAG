@@ -17,6 +17,14 @@ class GraphStore(ABC):
         """Create the named graph if it does not exist (idempotent)."""
         raise NotImplementedError
 
+    def drop_graph(self, name: str) -> bool:
+        """Delete the named graph and everything in it. Returns whether it existed.
+
+        Irreversible. Concrete stores implement this; the default raises so a
+        partial implementation fails loudly instead of silently keeping data.
+        """
+        raise NotImplementedError
+
     @abstractmethod
     def upsert_node(self, label: str, key: dict, props: dict) -> None:
         """Insert or update a node, matched on ``key`` (e.g. {"name": ...})."""
