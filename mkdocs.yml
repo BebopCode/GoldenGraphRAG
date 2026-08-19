@@ -1,0 +1,65 @@
+site_name: GoldenGraphRAG
+site_url: https://bebopcode.github.io/GoldenGraphRAG/
+site_description: >-
+  Config-driven pipeline that turns any text dataset into a knowledge graph
+  using any OpenAI-compatible LLM and PostgreSQL + Apache AGE.
+
+repo_url: https://github.com/BebopCode/GoldenGraphRAG
+repo_name: BebopCode/GoldenGraphRAG
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+    - content.action.view
+  palette:
+    - scheme: default
+      primary: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Configuration: configuration.md
+  - LLM Providers: providers.md
+  - Ontologies: ontologies.md
+  - CLI Reference: cli.md
+  - Architecture: architecture.md
+  - Development: development.md
+  - Troubleshooting: troubleshooting.md
+
+strict: true
