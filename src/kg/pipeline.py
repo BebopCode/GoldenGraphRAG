@@ -39,6 +39,10 @@ except ImportError:  # pragma: no cover
 
 
 def _progress(iterable, desc: str):
+    """Wrap ``iterable`` in a tqdm bar — but only on an interactive stderr.
+
+    Piped/CI runs (``kg ingest > log``) get the plain iterable so logs stay clean.
+    """
     if tqdm is None or not sys.stderr.isatty():
         return iterable
     return tqdm(iterable, desc=desc)
@@ -75,7 +79,17 @@ def run_pipeline(
     settings: Settings | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
-    """Run the full pipeline end-to-end. Returns a small stats dict."""
+    """Run the full pipeline end-to-end: load -> chunk -> extract -> fuse -> store.
+
+    Args:
+        dataset: File or directory to ingest (see :func:`load_dataset`).
+        settings: Validated settings; loaded from .env/config when omitted.
+        limit: Keep only the first N chunks — useful for a cheap partial run.
+
+    Returns:
+        Stats dict with ``documents``, ``chunks``, ``nodes`` and ``edges``
+        (nodes/edges are post-fusion counts of what was written).
+    """
     settings = settings or get_settings()
     ontology = load_ontology(settings=settings)
 

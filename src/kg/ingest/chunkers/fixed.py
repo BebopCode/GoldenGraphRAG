@@ -12,12 +12,20 @@ from kg.ingest.loaders import Document
 
 class FixedChunker(Chunker):
     def __init__(self, chunk_size: int = 1200, overlap: int = 200) -> None:
+        """Configure the window size; ``overlap`` must stay below ``chunk_size``
+        or the sliding window would never advance."""
         if overlap >= chunk_size:
             raise ValueError(f"overlap ({overlap}) must be < chunk_size ({chunk_size})")
         self.chunk_size = chunk_size
         self.overlap = overlap
 
     def chunk(self, document: Document) -> list[Chunk]:
+        """Slide character windows over the text, breaking on word boundaries.
+
+        Windows are trimmed back to the last whitespace so an entity is never
+        cut mid-token, and consecutive windows share ``overlap`` characters of
+        context so statements straddling a boundary still extract once.
+        """
         text = document.text
         if not text.strip():
             return []

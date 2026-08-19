@@ -31,6 +31,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _read_yaml(path: Path) -> dict:
+    """Parse a YAML file to a dict; missing or empty files yield ``{}``."""
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as fh:
@@ -38,6 +39,8 @@ def _read_yaml(path: Path) -> dict:
 
 
 def _settings_yaml_path(root: Path, explicit: Path | str | None) -> Path:
+    """Resolve which YAML to read: an explicit path, else settings.yaml with the
+    checked-in example as fallback so a fresh checkout still runs."""
     if explicit is not None:
         return Path(explicit)
     user_yaml = root / "config" / "settings.yaml"

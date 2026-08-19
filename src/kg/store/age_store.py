@@ -145,8 +145,11 @@ def _parse_agtype(val: Any) -> Any:
 
 class AgeGraphStore(GraphStore):
     def __init__(self, dsn: str, graph_name: str) -> None:
-        # AGE requires the graph name as a literal inside cypher() — it cannot be
-        # a bind parameter — so we inline it. Validate it hard to stay injection-safe.
+        """Store the connection info; the connection itself is opened lazily.
+
+        AGE requires the graph name as a literal inside cypher() — it cannot be
+        a bind parameter — so we inline it. Validate it hard to stay injection-safe.
+        """
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", graph_name):
             raise ValueError(
                 f"Invalid graph name {graph_name!r}: must match [A-Za-z_][A-Za-z0-9_]*"
@@ -157,10 +160,13 @@ class AgeGraphStore(GraphStore):
 
     @classmethod
     def from_settings(cls, settings: Settings) -> AgeGraphStore:
+        """Build a store from the db block of validated :class:`Settings`."""
         return cls(settings.db.dsn, settings.db.graph_name)
 
     # -- connection -------------------------------------------------------
     def _connect(self) -> psycopg.Connection:
+        """Open (or reuse) the session, with the AGE setup every session needs:
+        autocommit, ``LOAD 'age'``, and ``search_path`` including ``ag_catalog``."""
         if self._conn is None or self._conn.closed:
             conn = psycopg.connect(self._dsn)
             conn.autocommit = True  # AGE manages its own tx state
@@ -171,6 +177,7 @@ class AgeGraphStore(GraphStore):
         return self._conn
 
     def close(self) -> None:
+        """Close the connection if open; safe to call repeatedly."""
         if self._conn is not None and not self._conn.closed:
             self._conn.close()
         self._conn = None
@@ -179,6 +186,13 @@ class AgeGraphStore(GraphStore):
     def _exec_cypher(
         self, cypher_text: str, params: dict | None = None, n_cols: int = 1
     ) -> list[tuple]:
+        """Run cypher wrapped in ``SELECT * FROM cypher(...)`` and fetch raw rows.
+
+        ``n_cols`` must match the RETURN arity (AGE demands a column-definition
+        list of exactly that size). Values come back as agtype text — parse
+        them with :func:`_parse_agtype` before use. Params are bound (as a JSON
+        blob); only the pre-validated graph name is ever inlined.
+        """
         conn = self._connect()
         coldefs = ", ".join(f"c{i} agtype" for i in range(n_cols))
         # Graph name is a validated identifier, inlined as a literal (see __init__).
@@ -191,6 +205,7 @@ class AgeGraphStore(GraphStore):
 
     # -- GraphStore API ---------------------------------------------------
     def init_graph(self, name: str) -> None:
+        """Create the AGE graph if absent (idempotent — safe on every run)."""
         conn = self._connect()
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = %s;", (name,))
@@ -201,6 +216,11 @@ class AgeGraphStore(GraphStore):
                 logger.info("Graph '%s' already exists", name)
 
     def upsert_node(self, label: str, key: dict, props: dict) -> None:
+        """MERGE a node on ``key`` (e.g. ``{"name": ...}``) and SET the props.
+
+        Idempotent: re-ingesting the same entity updates it in place instead of
+        duplicating. Labels and property names are sanitized to identifiers.
+        """
         if not key:
             raise ValueError("upsert_node requires a non-empty key dict")
         label = _sanitize_ident(label)
@@ -219,6 +239,9 @@ class AgeGraphStore(GraphStore):
         self._exec_cypher(cypher, params)
 
     def upsert_edge(self, label: str, src: dict, tgt: dict, props: dict) -> bool:
+        """MERGE an edge between nodes matched by their keys; True if both endpoints
+        existed. A missing endpoint means the edge silently references nothing —
+        the caller logs and moves on rather than failing the ingest."""
         if not src or not tgt:
             raise ValueError("upsert_edge requires non-empty src and tgt key dicts")
         label = _sanitize_ident(label)
@@ -242,6 +265,12 @@ class AgeGraphStore(GraphStore):
         return created
 
     def query(self, cypher: str, params: dict | None = None) -> list[dict]:
+        """Run an arbitrary user query and return agtype-parsed rows.
+
+        Multi-column RETURN clauses are rewritten into a single map
+        (see :func:`_normalize_query`) because AGE's column-definition list
+        must match the RETURN arity, which we can't know up front.
+        """
         norm, n_cols = _normalize_query(cypher)
         rows = self._exec_cypher(norm, params, n_cols=n_cols)
         out: list[Any] = []
@@ -253,6 +282,7 @@ class AgeGraphStore(GraphStore):
     # -- helpers ----------------------------------------------------------
     @staticmethod
     def _key_terms(key: dict, prefix: str, params: dict[str, Any]) -> list[str]:
+        """Build ``{`prop`: $pfxN}` match terms, adding bindings to ``params``."""
         terms: list[str] = []
         for i, (k, v) in enumerate(key.items()):
             terms.append(f"`{_sanitize_ident(k)}`: ${prefix}{i}")

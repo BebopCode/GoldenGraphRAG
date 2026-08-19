@@ -15,6 +15,7 @@ class Extractor(ABC):
 
     @abstractmethod
     def extract(self, chunk: Chunk) -> ExtractionResult:
+        """Turn one chunk into ontology-constrained entities and relationships."""
         raise NotImplementedError
 
     @staticmethod

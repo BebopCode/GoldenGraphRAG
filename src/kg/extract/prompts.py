@@ -37,6 +37,7 @@ _RETRY_REMINDER = (
 
 
 def _describe_ontology(ontology: Ontology) -> str:
+    """Render the ontology as the closed label whitelist injected into the prompt."""
     lines: list[str] = []
     lines.append("ALLOWED NODE LABELS (use only these for entity.label):")
     for nt in ontology.node_types:
@@ -65,4 +66,5 @@ def build_extraction_prompt(chunk_text: str, ontology: Ontology) -> str:
 
 
 def build_retry_prompt(base_prompt: str) -> str:
+    """Re-issue the extraction prompt with a stricter JSON reminder appended."""
     return f"{base_prompt}\n\n{_RETRY_REMINDER}"

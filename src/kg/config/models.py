@@ -45,6 +45,12 @@ class Ontology(BaseModel):
 
     @model_validator(mode="after")
     def _validate_consistency(self) -> Ontology:
+        """Reject an ontology that would poison extraction later.
+
+        Catches empty type lists, duplicate labels, and relationships pointing
+        at node labels that don't exist — all cheap to catch here, expensive to
+        debug mid-run.
+        """
         if not self.node_types:
             raise ValueError("ontology must define at least one node_type")
 
@@ -75,9 +81,11 @@ class Ontology(BaseModel):
 
     # -- convenience lookups used by the extractor and store --
     def node_labels(self) -> set[str]:
+        """All declared node labels — the closed set entity labels must come from."""
         return {nt.label for nt in self.node_types}
 
     def relationship_labels(self) -> set[str]:
+        """All declared relationship labels — the closed set edge labels must come from."""
         return {rt.label for rt in self.relationship_types}
 
     def allowed_rel_pairs(self) -> set[tuple[str, str, str]]:
@@ -85,12 +93,14 @@ class Ontology(BaseModel):
         return {(rt.label, rt.source, rt.target) for rt in self.relationship_types}
 
     def node_properties(self, label: str) -> list[str]:
+        """Declared property names for a node label (empty if unknown — not an error)."""
         for nt in self.node_types:
             if nt.label == label:
                 return nt.properties
         return []
 
     def relationship_properties(self, label: str) -> list[str]:
+        """Declared property names for a relationship label (empty if unknown)."""
         for rt in self.relationship_types:
             if rt.label == label:
                 return rt.properties
@@ -146,6 +156,7 @@ class LLMSettings(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> LLMSettings:
+        """Guard the knobs that would otherwise fail obscurely mid-run."""
         if self.concurrency < 1:
             raise ValueError("llm.concurrency must be >= 1")
         if self.structured_mode not in ("auto", "json_schema", "json_object", "none"):

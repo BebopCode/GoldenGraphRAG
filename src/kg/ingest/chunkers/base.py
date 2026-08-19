@@ -28,6 +28,7 @@ class Chunker(ABC):
 
     @abstractmethod
     def chunk(self, document: Document) -> list[Chunk]:
+        """Split one document into chunks (order-preserving, ids ``<doc>#<idx>``)."""
         raise NotImplementedError
 
 

@@ -52,6 +52,7 @@ class LLMExtractor(Extractor):
         max_retries: int = 1,
         json_mode: bool = True,
     ) -> None:
+        """Bind the client, ontology, and extraction knobs (see the class docstring)."""
         self.client = client
         self.ontology = ontology
         self.temperature = temperature
@@ -62,6 +63,7 @@ class LLMExtractor(Extractor):
     def from_settings(  # type: ignore[override]
         client: LLMClient, ontology: Ontology, **kwargs: object
     ) -> LLMExtractor:
+        """Factory used by the pipeline: build an extractor from loose settings kwargs."""
         return LLMExtractor(
             client,
             ontology,
@@ -72,6 +74,12 @@ class LLMExtractor(Extractor):
 
     # -- main entry -------------------------------------------------------
     def extract(self, chunk: Chunk) -> ExtractionResult:
+        """Extract entities/relationships from one chunk, constrained to the ontology.
+
+        Never raises for bad model output: unparseable JSON (after the retry)
+        yields an empty result with a warning, so one bad chunk doesn't abort
+        the run. Off-ontology output is dropped inside ``_validate``.
+        """
         prompt = build_extraction_prompt(chunk.text, self.ontology)
         data = self._call_and_parse(prompt)
 
@@ -83,6 +91,12 @@ class LLMExtractor(Extractor):
 
     # -- LLM call + JSON parsing with one retry ---------------------------
     def _call_and_parse(self, prompt: str) -> dict | None:
+        """Call the LLM and parse its output to a dict.
+
+        Retries up to ``max_retries`` times, re-sending the prompt with a
+        stricter reminder after unparseable output. Returns None only when
+        every attempt failed (the caller then skips the chunk).
+        """
         fmt = "json" if self.json_mode else None
         attempts = 1 + max(0, self.max_retries)
         last_raw = ""
@@ -110,6 +124,13 @@ class LLMExtractor(Extractor):
 
     # -- ontology validation ---------------------------------------------
     def _validate(self, data: dict, chunk_id: str) -> ExtractionResult:
+        """Filter raw model output against the ontology, logging every drop.
+
+        Drops entities/relationships with missing fields or unknown labels,
+        and relationships whose (label, src_label, tgt_label) triple isn't
+        declared. Endpoints that name no extracted entity are kept — fusion
+        may still resolve them against other chunks.
+        """
         node_labels = self.ontology.node_labels()
         rel_labels = self.ontology.relationship_labels()
         allowed_pairs = self.ontology.allowed_rel_pairs()

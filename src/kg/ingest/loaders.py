@@ -27,15 +27,18 @@ class Document(BaseModel):
 
 
 def _load_text(path: Path) -> str:
+    """Read a file as UTF-8 text (the common case all loaders share)."""
     return path.read_text(encoding="utf-8")
 
 
 def load_txt(path: Path) -> list[Document]:
+    """Whole file as one document, id = filename stem."""
     return [Document(id=path.stem, text=_load_text(path), source=str(path))]
 
 
 def load_md(path: Path) -> list[Document]:
-    # Markdown is text; structure is recovered downstream by the structural chunker.
+    """Whole file as one document. Markdown is text; structure is recovered
+    downstream by the structural chunker."""
     return [Document(id=path.stem, text=_load_text(path), source=str(path))]
 
 
@@ -87,6 +90,7 @@ def load_csv(path: Path) -> list[Document]:
 
 
 def _str_meta(d: dict) -> dict[str, str]:
+    """Non-id/text fields of a JSON item, stringified, as document metadata."""
     return {k: str(v) for k, v in d.items() if k not in ("id", "text")}
 
 

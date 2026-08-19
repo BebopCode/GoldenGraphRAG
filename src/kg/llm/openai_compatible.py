@@ -45,6 +45,7 @@ class OpenAICompatibleLLMClient(LLMClient):
     """
 
     def __init__(self, settings: LLMSettings) -> None:
+        """Create one shared SDK client with retry/usage state for all threads."""
         self.settings = settings
         self._client = OpenAI(
             api_key=settings.api_key or "none",
@@ -78,6 +79,15 @@ class OpenAICompatibleLLMClient(LLMClient):
         json_schema: dict[str, Any] | None = None,
         schema_name: str = "extraction",
     ) -> str:
+        """Complete the prompt; see :meth:`LLMClient.complete` for the arguments.
+
+        Owns the retry policy: transient failures (timeout, connection reset,
+        408/409/425/429, 5xx) are retried with bounded backoff; a 400 that
+        looks like ``response_format`` rejection first downgrades the
+        structured-output mode and retries immediately. Any other 4xx — or
+        exhausting the attempts — raises :class:`LLMCallError` so callers can
+        treat the chunk as poisoned rather than the run as dead.
+        """
         messages: list[ChatCompletionMessageParam] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -226,6 +236,7 @@ class OpenAICompatibleLLMClient(LLMClient):
 
     # -- observability -----------------------------------------------------
     def _record_usage(self, resp: Any) -> None:
+        """Accumulate token counts (and OpenRouter's dollar cost) under the usage lock."""
         usage = getattr(resp, "usage", None)
         if usage is None:
             return
@@ -240,11 +251,13 @@ class OpenAICompatibleLLMClient(LLMClient):
                 self._usage["cost"] = self._usage.get("cost", 0.0) + float(cost)
 
     def usage_summary(self) -> dict[str, Any]:
+        """Snapshot of cumulative usage: requests, prompt/completion/total tokens, cost."""
         with self._usage_lock:
             return dict(self._usage)
 
     @staticmethod
     def _warn_if_truncated(resp: Any) -> None:
+        """Warn when ``finish_reason == "length"`` — truncated JSON won't parse."""
         try:
             finish = resp.choices[0].finish_reason
         except (AttributeError, IndexError):
@@ -277,8 +290,10 @@ class OpenAICompatibleLLMClient(LLMClient):
         return out
 
     def close(self) -> None:
+        """Close the underlying SDK client and its connection pool."""
         self._client.close()
 
 
 def _json_dumps_for_log(schema: dict[str, Any]) -> str:
+    """Truncate a schema to 200 chars for log lines. Currently unused."""
     return json.dumps(schema)[:200]

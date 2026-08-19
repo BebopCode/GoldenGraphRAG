@@ -43,15 +43,23 @@ def _looks_like_caps_title(line: str) -> bool:
 
 
 def _is_blank(line: str) -> bool:
+    """True for whitespace-only lines."""
     return not line.strip()
 
 
 class StructuralChunker(Chunker):
     def __init__(self, max_chars: int | None = None) -> None:
-        # Optional cap: if a single section is huge, the extractor prompt can blow up.
+        """Optional cap: if a single section is huge, the extractor prompt can blow up."""
         self.max_chars = max_chars
 
     def chunk(self, document: Document) -> list[Chunk]:
+        """Split along detected structure: markdown headers, else heuristic titles.
+
+        The heading *path* (e.g. ``Part III > Article 21``) rides along in each
+        chunk's metadata so extraction keeps its context. Sections exceeding
+        ``max_chars`` are windowed with the heading re-attached. Documents with
+        no detectable structure come back as a single chunk, flagged as such.
+        """
         lines = document.text.splitlines()
         if not any(line.strip() for line in lines):
             return []
@@ -108,6 +116,7 @@ class StructuralChunker(Chunker):
         path: str,
         note: str | None = None,
     ) -> Chunk:
+        """Assemble a Chunk, carrying heading/path/note into metadata when present."""
         meta = {"strategy": "structural", "index": idx, **document.metadata}
         if heading:
             meta["heading"] = heading

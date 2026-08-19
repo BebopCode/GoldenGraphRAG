@@ -20,6 +20,7 @@ app = typer.Typer(
 
 
 def _setup_logging(level: str) -> None:
+    """Configure root logging with the pipeline's one-line format."""
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",

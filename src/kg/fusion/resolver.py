@@ -53,6 +53,8 @@ def normalize_name(name: str) -> str:
 
 class EntityResolver:
     def __init__(self, use_embeddings: bool = False) -> None:
+        """``use_embeddings`` is accepted for config compatibility but not yet
+        implemented — matching stays normalized-string-equality (warns if set)."""
         if use_embeddings:
             logger.warning(
                 "use_embeddings=True requested but not implemented; using string matching."
@@ -94,12 +96,18 @@ class EntityResolver:
     # -- helpers ----------------------------------------------------------
     @staticmethod
     def _pick_representative_name(group: list[Entity]) -> str:
-        # Most frequent surface form wins; ties broken by longest (most specific).
+        """Choose the canonical surface form: most frequent, ties to the longest."""
         counts = Counter(e.name for e in group)
         return max(group, key=lambda e: (counts[e.name], len(e.name))).name
 
     @staticmethod
     def _merge_group(group: list[Entity], rep_name: str) -> Entity:
+        """Collapse duplicate entities into one: union of properties, first label.
+
+        Conflicting labels within a group are logged (and the first wins) —
+        they usually mean two genuinely different things normalized to the
+        same key, which is worth a human's glance.
+        """
         labels = {e.label for e in group}
         if len(labels) > 1:
             logger.info(
@@ -116,6 +124,12 @@ class EntityResolver:
         original_to_canonical: dict[str, str],
         norm_to_canonical: dict[str, str],
     ) -> list[Relationship]:
+        """Point every relationship at canonical names, then dedupe identical edges.
+
+        Edges that become self-loops after canonicalization are dropped (they
+        only ever linked a duplicate to itself). Duplicate (src, tgt, label)
+        edges are merged, later properties overwriting earlier ones.
+        """
         def resolve_name(name: str) -> str:
             if name in original_to_canonical:
                 return original_to_canonical[name]
