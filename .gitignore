@@ -8,12 +8,15 @@ dist/
 .venv/
 venv/
 .env
-
+env
 # Testing / coverage
 .pytest_cache/
 .coverage
 htmlcov/
 coverage.xml
+
+# Docs build output (mkdocs)
+site/
 
 # IDE / OS
 .idea/
