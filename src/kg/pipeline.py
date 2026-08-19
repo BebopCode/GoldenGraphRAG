@@ -3,12 +3,19 @@
 This is the seam that composes every module behind the interfaces. Swapping the
 LLM, the chunker, or the store only changes which concrete class is constructed
 here — the flow stays the same.
+
+Extraction fans out across threads (network latency dominates once the model is
+remote, and vLLM's continuous batching makes 32 concurrent requests nearly free
+compared to 4). Fusion and the AGE upserts stay single-threaded by design: the
+MERGE-based writes are not safe to interleave, so extractions are collected
+first, then fused, then written.
 """
 
 from __future__ import annotations
 
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +26,8 @@ from kg.extract.schemas import ExtractionResult
 from kg.fusion.resolver import EntityResolver
 from kg.ingest.chunkers import get_chunker
 from kg.ingest.loaders import load_dataset
-from kg.llm.ollama_client import OllamaLLMClient
+from kg.llm.base import LLMCallError
+from kg.llm.factory import build_llm_client
 from kg.store.age_store import AgeGraphStore
 
 logger = logging.getLogger(__name__)
@@ -34,6 +42,31 @@ def _progress(iterable, desc: str):
     if tqdm is None or not sys.stderr.isatty():
         return iterable
     return tqdm(iterable, desc=desc)
+
+
+def _extract_all(extractor: LLMExtractor, chunks: list, workers: int) -> list[ExtractionResult]:
+    """Extract concurrently, preserving chunk order, isolating per-chunk failures.
+
+    One poisoned chunk must not kill a 6-hour ingest: permanent LLM failures are
+    logged and that chunk yields an empty result instead.
+    """
+    results: list[ExtractionResult | None] = [None] * len(chunks)
+    bar = _progress(chunks, "extract")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(extractor.extract, chunk): i for i, chunk in enumerate(bar)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                results[i] = fut.result()
+            except LLMCallError as exc:
+                logger.error("chunk %s failed permanently: %s", chunks[i].id, exc)
+                results[i] = ExtractionResult(entities=[], relationships=[], chunk_id=chunks[i].id)
+            except Exception as exc:  # extraction must never abort the whole run
+                logger.exception("Extraction failed for chunk %s: %s", chunks[i].id, exc)
+                results[i] = ExtractionResult(entities=[], relationships=[], chunk_id=chunks[i].id)
+
+    return [r for r in results if r is not None]  # order preserved
 
 
 def run_pipeline(
@@ -66,8 +99,15 @@ def run_pipeline(
     if not chunks:
         return {"documents": len(documents), "chunks": 0, "nodes": 0, "edges": 0}
 
-    # 3. extract
-    client = OllamaLLMClient.from_settings(settings)
+    # 3. extract (concurrent; one shared, thread-safe client)
+    client = build_llm_client(settings.llm)
+    logger.info(
+        "LLM: provider=%s model=%s base_url=%s concurrency=%d",
+        settings.llm.provider,
+        settings.llm.model,
+        settings.llm.base_url,
+        settings.llm.concurrency,
+    )
     extractor = LLMExtractor.from_settings(
         client,
         ontology,
@@ -75,19 +115,16 @@ def run_pipeline(
         max_retries=settings.max_retries,
         json_mode=settings.json_mode,
     )
-    results: list[ExtractionResult] = []
-    for chunk in _progress(chunks, "extract"):
-        try:
-            results.append(extractor.extract(chunk))
-        except Exception as exc:  # extraction must never abort the whole run
-            logger.exception("Extraction failed for chunk %s: %s", chunk.id, exc)
-            results.append(ExtractionResult(entities=[], relationships=[], chunk_id=chunk.id))
+    results = _extract_all(extractor, chunks, settings.llm.concurrency)
 
     total_entities = sum(len(r.entities) for r in results)
     total_rels = sum(len(r.relationships) for r in results)
     logger.info(
         "Extracted %d entities / %d relationships (pre-fusion).", total_entities, total_rels
     )
+    usage = getattr(client, "usage_summary", None)
+    if callable(usage):
+        logger.info("LLM usage: %s", usage())
 
     # 4. fuse
     entities, relationships = EntityResolver(use_embeddings=settings.use_embeddings_fusion).resolve(

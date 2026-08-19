@@ -1,7 +1,10 @@
 """Ontology-constrained LLM extractor.
 
 Flow per chunk:
-  1. Build the prompt (ontology injected) and call the LLM with JSON mode.
+  1. Build the prompt (ontology injected) and call the LLM, sending the JSON
+     Schema alongside it so endpoints with structured outputs can constrain
+     decoding. The prompt keeps its own copy of the schema: some endpoints
+     ignore ``response_format``, and the prompt is the floor.
   2. Parse the JSON the model returns.
   3. Validate against the ontology: drop entities/relationships whose labels
      aren't allowed (or whose endpoints break the declared source/target rules),
@@ -15,17 +18,28 @@ from __future__ import annotations
 import json
 import logging
 import re
+from functools import lru_cache
 
 from kg.config.models import Ontology
 from kg.extract.base import Extractor
 from kg.extract.prompts import SYSTEM_PROMPT, build_extraction_prompt, build_retry_prompt
 from kg.extract.schemas import Entity, ExtractionResult, Relationship
 from kg.ingest.chunkers.base import Chunk
-from kg.llm.base import LLMClient
+from kg.llm.base import LLMCallError, LLMClient
 
 logger = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
+
+
+@lru_cache(maxsize=1)
+def _extraction_schema() -> dict:
+    """The Pydantic schema for ExtractionResult, computed once per process.
+
+    lru_cache also gives every thread the same dict object, which keeps the
+    schema thread-safe to pass around during concurrent extraction.
+    """
+    return ExtractionResult.model_json_schema()
 
 
 class LLMExtractor(Extractor):
@@ -76,10 +90,15 @@ class LLMExtractor(Extractor):
             current = prompt if attempt == 0 else build_retry_prompt(prompt)
             try:
                 raw = self.client.complete(
-                    current, system=SYSTEM_PROMPT, temperature=self.temperature, format=fmt
+                    current,
+                    system=SYSTEM_PROMPT,
+                    temperature=self.temperature,
+                    format=fmt,
+                    json_schema=_extraction_schema(),
+                    schema_name="kg_extraction",
                 )
-            except RuntimeError as exc:
-                logger.error("LLM call failed (attempt %d): %s", attempt + 1, exc)
+            except LLMCallError as exc:
+                logger.error("LLM call failed permanently (attempt %d): %s", attempt + 1, exc)
                 continue
             last_raw = raw
             data = _safe_json(raw)

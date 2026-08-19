@@ -1,7 +1,7 @@
 """Typer CLI entrypoint: ``kg init | ingest | query | info``.
 
 Imports of heavy collaborators (store, pipeline) are done *inside* the command
-bodies so ``kg --help`` stays fast and doesn't require the DB/Ollama to be up.
+bodies so ``kg --help`` stays fast and doesn't require the DB/LLM to be up.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import typer
 
 app = typer.Typer(
     name="kg",
-    help="Config-driven text-to-knowledge-graph pipeline (Ollama + Apache AGE).",
+    help="Config-driven text-to-knowledge-graph pipeline (any OpenAI-compatible LLM + Apache AGE).",
     no_args_is_help=True,
 )
 
@@ -84,13 +84,18 @@ def query(
 @app.command()
 def info(
     env: Path = typer.Option(None, help="Path to .env (default: project root)."),
+    check_llm: bool = typer.Option(
+        False, "--check-llm", help="Ping the LLM endpoint (auth + model slug)."
+    ),
 ) -> None:
-    """Show the effective config and ontology (no DB/Ollama needed)."""
+    """Show the effective config and ontology (no DB needed)."""
+    import json as _json
+
     from kg.config.loader import load_ontology, load_settings
 
     settings = load_settings(env_path=env)
     ontology = load_ontology(settings=settings)
-    typer.echo(f"settings.ollama = {settings.ollama.model_dump()}")
+    typer.echo(f"settings.llm = {_json.dumps(settings.llm.redacted(), default=str)}")
     typer.echo(f"settings.chunker = {settings.chunker}")
     typer.echo(
         f"ontology = {ontology.name} ({len(ontology.node_types)} node types, "
@@ -98,6 +103,13 @@ def info(
     )
     typer.echo("node labels:      " + ", ".join(sorted(ontology.node_labels())))
     typer.echo("relationship labels: " + ", ".join(sorted(ontology.relationship_labels())))
+
+    if check_llm:
+        from kg.llm.factory import build_llm_client
+
+        llm = build_llm_client(settings.llm)
+        typer.echo(_json.dumps(llm.health_check(), indent=2, default=str))
+        llm.close()
 
 
 if __name__ == "__main__":

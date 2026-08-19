@@ -2,8 +2,8 @@
 
 from kg.config.models import (
     DatabaseSettings,
+    LLMSettings,
     NodeType,
-    OllamaSettings,
     Ontology,
     RelationshipType,
     Settings,
@@ -11,9 +11,9 @@ from kg.config.models import (
 
 __all__ = [
     "DatabaseSettings",
+    "LLMSettings",
     "NodeType",
     "Ontology",
-    "OllamaSettings",
     "RelationshipType",
     "Settings",
 ]

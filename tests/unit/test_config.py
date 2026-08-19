@@ -53,13 +53,45 @@ def test_load_settings_from_env(tmp_path: Path, project_root: Path) -> None:
     env = tmp_path / ".env"
     env.write_text(
         "POSTGRES_USER=u\nPOSTGRES_PASSWORD=p\nPOSTGRES_DB=d\n"
-        "OLLAMA_MODEL=mymodel\nONTOLOGY_PATH=config/ontologies/constitution.yaml\n"
+        "LLM_PROVIDER=openrouter\nLLM_MODEL=vendor/model\nLLM_API_KEY=sk-test\n"
+        "ONTOLOGY_PATH=config/ontologies/constitution.yaml\n"
     )
     settings = load_settings(env_path=env, project_root=project_root)
     assert settings.db.user == "u"
-    assert settings.ollama.model == "mymodel"
+    assert settings.llm.provider == "openrouter"
+    assert settings.llm.model == "vendor/model"
+    assert settings.llm.api_key == "sk-test"
     assert settings.ontology_path.name == "constitution.yaml"
     assert settings.ontology_path.exists()
+
+
+def test_ollama_is_just_another_endpoint(tmp_path: Path, project_root: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text(
+        "LLM_PROVIDER=ollama\nLLM_MODEL=qwen3:14b\nLLM_BASE_URL=http://localhost:11434/v1\n"
+    )
+    settings = load_settings(env_path=env, project_root=project_root)
+    assert settings.llm.provider == "ollama"
+    assert settings.llm.base_url == "http://localhost:11434/v1"
+    assert settings.llm.model == "qwen3:14b"
+
+
+def test_llm_base_url_requires_v1(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    from kg.config.models import LLMSettings
+
+    with pytest.raises(ValidationError) as exc:
+        LLMSettings(base_url="http://localhost:8000")
+    assert "/v1" in str(exc.value)
+
+
+def test_llm_settings_redacted_hides_key() -> None:
+    from kg.config.models import LLMSettings
+
+    s = LLMSettings(api_key="sk-secret")
+    assert s.redacted()["api_key"] == "***"
+    assert "sk-secret" not in str(s.redacted())
 
 
 def test_yaml_is_valid(generic_ontology_path: Path, constitution_ontology_path: Path) -> None:

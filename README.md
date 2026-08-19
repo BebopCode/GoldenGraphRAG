@@ -1,13 +1,15 @@
 # kg-pipeline
 
-**Turn any text dataset into a queryable knowledge graph using a local LLM and PostgreSQL + Apache AGE.**
+**Turn any text dataset into a queryable knowledge graph using any OpenAI-compatible LLM and PostgreSQL + Apache AGE.**
 
 `kg-pipeline` is a modular, config-driven pipeline: it loads documents, chunks them
-along their natural structure, extracts entities and relationships with a local Ollama
-model constrained to a declared ontology, fuses duplicate entities into canonical nodes,
+along their natural structure, extracts entities and relationships with an LLM
+constrained to a declared ontology, fuses duplicate entities into canonical nodes,
 and stores the result as a property graph in Apache AGE — which runs openCypher *inside*
 PostgreSQL. The ontology is a YAML file, so swapping domains (Constitution → movies →
-anything) is an edit to that file, never to Python.
+anything) is an edit to that file, never to Python. And because every provider from
+OpenRouter to vLLM to a local Ollama speaks the OpenAI Chat Completions API, the LLM
+is a set of `.env` values, not a code path.
 
 ---
 
@@ -17,11 +19,11 @@ anything) is an edit to that file, never to Python.
 flowchart LR
     A["Raw dataset<br/>(txt / md / json / csv)"] --> B["Loaders<br/>→ Documents"]
     B --> C["Chunker<br/>(structural / fixed)"]
-    C --> D["Extractor<br/>Ollama + ontology-constrained JSON"]
+    C --> D["Extractor<br/>schema-constrained JSON"]
     D --> E["Fusion<br/>dedup / canonicalize"]
     E --> F[("Apache AGE<br/>in PostgreSQL")]
     G[["ontology.yaml"]] -.->|allowed labels| D
-    H["Ollama<br/>(local model)"] -.-> D
+    H["OpenAI-compatible<br/>LLM endpoint"] -.->|LLM_PROVIDER /<br/>LLM_BASE_URL / LLM_MODEL| D
 ```
 
 The five stages map to modules behind interfaces, so each can be swapped independently:
@@ -40,12 +42,19 @@ The five stages map to modules behind interfaces, so each can be swapped indepen
 
 - **Python 3.11+**
 - **Docker** (+ Docker Compose)
-- **Ollama** installed and running on the host, with a model pulled, e.g.:
-  ```bash
-  ollama pull llama3.1      # or: qwen3, mistral, gemma, …
-  ```
-  Any model that follows Ollama's JSON mode works. (A cloud-routed model like
-  `glm-5:cloud` will not work without extra auth — prefer a local model.)
+- **An LLM endpoint.** Anything that speaks the OpenAI Chat Completions API:
+
+  | Provider | `LLM_PROVIDER` | Endpoint | Notes |
+  |---|---|---|---|
+  | [OpenRouter](https://openrouter.ai) | `openrouter` | hosted | one key, hundreds of models; see below |
+  | [vLLM](https://docs.vllm.ai) | `vllm` | self-hosted | the usual choice for sensitive corpora |
+  | OpenAI | `openai` | hosted | |
+  | Together / Fireworks | `together` / `fireworks` | hosted | |
+  | LiteLLM proxy | `litellm` | self-hosted gateway | |
+  | Ollama | `ollama` | local | same client, `http://localhost:11434/v1` |
+
+  The provider name only fills preset defaults; `LLM_BASE_URL` + `LLM_MODEL` +
+  `LLM_API_KEY` in `.env` are what actually route the calls.
 
 ---
 
@@ -53,7 +62,7 @@ The five stages map to modules behind interfaces, so each can be swapped indepen
 
 ```bash
 git clone <your-repo-url> kg-pipeline && cd kg-pipeline
-cp .env.example .env            # then edit POSTGRES_PASSWORD + OLLAMA_MODEL
+cp .env.example .env            # then edit POSTGRES_PASSWORD + LLM_* values
 
 docker compose up -d            # starts PostgreSQL 16 + Apache AGE
 
@@ -65,8 +74,73 @@ pip install -e .                # installs the `kg` console command
 Confirm it's alive:
 ```bash
 docker compose ps              # kg-age should be (healthy)
-kg info                        # prints effective config + ontology (no DB/Ollama needed)
+kg info                        # prints effective config + ontology (no DB/LLM needed)
+kg info --check-llm            # pings the endpoint: wrong URL/dead key fails in seconds
 ```
+
+### Using OpenRouter
+
+1. Create a key at `openrouter.ai/keys` and add credit.
+2. Set `.env`:
+   ```bash
+   LLM_PROVIDER=openrouter
+   LLM_API_KEY=sk-or-...
+   LLM_MODEL=qwen/qwen3-30b-a3b-instruct    # slugs are vendor/model — check the model page
+   ```
+3. Sanity-check the key and slug before ingesting:
+   ```bash
+   curl https://openrouter.ai/api/v1/chat/completions \
+     -H "Authorization: Bearer $LLM_API_KEY" -H "Content-Type: application/json" \
+     -d '{"model":"qwen/qwen3-30b-a3b-instruct","messages":[{"role":"user","content":"say ok"}]}'
+   ```
+
+Things worth knowing:
+
+- **Structured-output support is per endpoint, not per model.** The client sets
+  `provider.require_parameters = true` whenever a schema is sent, so OpenRouter
+  only routes to endpoints that honour `response_format` — without it you can get
+  valid JSON that silently ignores your ontology.
+- **Rate limits (429s) are normal.** The client retries with backoff; keep
+  `LLM_CONCURRENCY` modest (4–8) until you know your account's limits.
+- **Prompts transit third-party inference providers.** For sensitive corpora pin
+  `LLM_ALLOWED_PROVIDERS` to vendors your legal team approved — or use vLLM.
+- Model slugs can be re-pointed upstream; pin dated slugs where offered to keep
+  extraction output stable.
+
+### Using vLLM
+
+```bash
+pip install vllm
+vllm serve Qwen/Qwen3-30B-A3B-Instruct \
+  --served-model-name kg-extractor \
+  --api-key "$VLLM_API_KEY" \
+  --host 0.0.0.0 --port 8000 \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.90 \
+  --tensor-parallel-size 2          # = number of GPUs
+```
+
+```bash
+# .env
+LLM_PROVIDER=vllm
+LLM_BASE_URL=http://localhost:8000/v1     # must end in /v1
+LLM_MODEL=kg-extractor                    # = --served-model-name
+LLM_API_KEY=$VLLM_API_KEY                 # whatever you passed to --api-key
+```
+
+Things worth knowing:
+
+- **`--max-model-len` must exceed prompt + ontology + output.** Truncated
+  extractions log a `finish_reason=length` warning — raise `--max-model-len`
+  and `LLM_MAX_TOKENS`, or shrink `CHUNK_SIZE`.
+- **Constrained decoding is genuinely enforced** here, unlike prompt-only JSON —
+  a real accuracy win for ontology-constrained extraction. The structured-output
+  parameter names changed across vLLM versions (`guided_json` was removed in
+  0.12.0); the client starts with standard `response_format` and falls back
+  automatically, so both old and new servers work. Pin `LLM_STRUCTURED_MODE`
+  once you know which you're on.
+- Concurrency is nearly free under vLLM's continuous batching — raise
+  `LLM_CONCURRENCY` (32 is reasonable) rather than adding worker processes.
 
 ---
 
@@ -148,9 +222,11 @@ examples in `config/ontologies/` (`generic.yaml`, `constitution.yaml`).
 Everything pluggable sits behind an abstract base class, so a new implementation is a new
 class plus one line of construction in `pipeline.py`.
 
-**Replace the LLM.** Implement `kg.llm.base.LLMClient` (one method: `complete(...)`).
-An OpenAI/Anthropic client would call the provider's API inside `complete` and otherwise
-look identical. Wire it in `pipeline.py` where `OllamaLLMClient` is constructed.
+**Replace the LLM.** Any OpenAI-compatible endpoint already works with zero code —
+it's `.env` values (`LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY`).
+For a provider that *isn't* OpenAI-compatible, implement `kg.llm.base.LLMClient`
+(one method: `complete(...)` plus optional `health_check`/`close`) and register a
+preset in `kg/llm/factory.py`.
 
 **Replace the store.** Implement `kg.store.base.GraphStore`
 (`init_graph / upsert_node / upsert_edge / query`). A Neo4j store would translate those to
@@ -176,7 +252,7 @@ kg-pipeline/
 ├── src/kg/
 │   ├── cli.py                  # `kg` Typer entrypoint
 │   ├── config/                 # pydantic models + YAML/.env loader (validates at startup)
-│   ├── llm/                    # LLMClient ABC + Ollama implementation
+│   ├── llm/                    # LLMClient ABC + OpenAI-compatible client + provider factory
 │   ├── ingest/                 # loaders + chunkers (structural / fixed)
 │   ├── extract/                # ontology-constrained LLM extractor + prompts + schemas
 │   ├── fusion/                 # entity resolution / dedup
@@ -217,13 +293,16 @@ about what it does not do yet:
   (GraphRAG-style retrieval + answering) is a future phase.
 - **No text-to-Cypher.** Queries are hand-written openCypher.
 - **No web UI** — CLI only.
-- **Local Ollama only** — no cloud/API LLM (though the `LLMClient` interface makes adding
-  one trivial). Ollama runs on the host, not in the compose file.
 - **Fusion is string-based.** Normalized matching collapses "Article 21"/"Art. 21", but
   semantic aliases ("the right to life" → "Article 21") need embeddings — there's a
-  `use_embeddings` hook left for that.
+  `use_embeddings` hook left for that. (Note: the embeddings half would need its own
+  endpoint — OpenRouter's `/v1/embeddings` coverage is thin; vLLM can serve one.)
 - **Extraction quality** depends on the model and prompt. Larger/better models and
   per-domain prompt tuning will improve precision; the ontology constraint already does
-  most of the heavy lifting.
-- **Throughput** is per-chunk single-threaded with one `MERGE` per node/edge. For large
-  datasets, batch `UNWIND` upserts and parallel extraction are natural follow-ups.
+  most of the heavy lifting, and endpoints with structured outputs enforce it at
+  decode time.
+- **Store writes are single-threaded** with one `MERGE` per node/edge. Extraction is
+  concurrent (`LLM_CONCURRENCY`), but for large datasets batch `UNWIND` upserts are the
+  natural next step.
+- **Ingest is not resumable.** A failed run restarts extraction from scratch; per-chunk
+  content hashing to skip already-extracted chunks is a natural follow-up.

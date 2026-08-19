@@ -2,7 +2,7 @@
 """End-to-end sanity run on the committed sample.
 
 Runs the full pipeline against ``data/samples/`` and prints what landed in the
-graph. Requires: the AGE container up and Ollama running with a pulled model.
+graph. Requires: the AGE container up and a reachable LLM endpoint (.env).
 """
 
 from __future__ import annotations

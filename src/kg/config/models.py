@@ -116,12 +116,56 @@ class DatabaseSettings(BaseModel):
         )
 
 
-class OllamaSettings(BaseModel):
-    """Ollama HTTP API settings (from .env)."""
+class LLMSettings(BaseModel):
+    """LLM endpoint settings (from .env / settings.yaml).
 
-    host: str = "http://localhost:11434"
-    model: str = "llama3.1"
+    Any OpenAI Chat Completions-compatible endpoint works: OpenRouter, vLLM,
+    OpenAI, Together, Fireworks, LiteLLM, Ollama (``/v1``), ... The provider
+    name only selects preset defaults — the wire protocol is the same.
+    """
+
+    provider: str = "openrouter"
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
     timeout: float = 120.0
+    max_retries: int = 2
+    #: concurrent chunk extractions; 1 reproduces the old serial behaviour
+    concurrency: int = 8
+    #: how strictly to ask for schema-constrained output:
+    #:   auto          try response_format and degrade on rejection (default)
+    #:   json_schema   always send response_format=json_schema
+    #:   json_object   only ask for "valid JSON" (schema stays prompt-side)
+    #:   none          never send response_format
+    structured_mode: str = "auto"
+    #: provider allowlist, honoured by gateways that support routing hints
+    allowed_providers: list[str] = Field(default_factory=list)
+    max_tokens: int | None = None
+    #: extra static headers (e.g. OpenRouter's HTTP-Referer/X-Title)
+    extra_headers: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate(self) -> LLMSettings:
+        if self.concurrency < 1:
+            raise ValueError("llm.concurrency must be >= 1")
+        if self.structured_mode not in ("auto", "json_schema", "json_object", "none"):
+            raise ValueError("llm.structured_mode must be one of auto|json_schema|json_object|none")
+        # Every compatible endpoint we target serves /v1/chat/completions, so a
+        # bare host is almost certainly a config slip that would 404 mid-run.
+        # Empty model/base_url is fine here — the factory fills the provider
+        # preset and enforces completeness at construction time.
+        if self.base_url and "/v1" not in self.base_url:
+            raise ValueError(
+                f"llm.base_url must include the /v1 path (got {self.base_url!r}) — "
+                "e.g. http://localhost:8000/v1, https://openrouter.ai/api/v1"
+            )
+        return self
+
+    def redacted(self) -> dict[str, object]:
+        """Safe-to-log view: the API key never leaves the process."""
+        data = self.model_dump()
+        data["api_key"] = "***" if self.api_key else ""
+        return data
 
 
 class Settings(BaseModel):
@@ -132,7 +176,7 @@ class Settings(BaseModel):
     """
 
     db: DatabaseSettings
-    ollama: OllamaSettings
+    llm: LLMSettings
     ontology_path: Path
     chunker: str = "structural"
     log_level: str = "INFO"

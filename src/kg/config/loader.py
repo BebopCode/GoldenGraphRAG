@@ -1,7 +1,7 @@
 """Load and validate all configuration at startup.
 
 Three inputs, all validated through pydantic:
-  * `.env`            — secrets/hosts (DB creds, Ollama host, model, paths)
+  * `.env`            — secrets/hosts (DB creds, LLM endpoint + key, paths)
   * `settings.yaml`   — tuning knobs (chunk sizes, batch sizes, temperature)
   * `ontology.yaml`   — node/relationship types (the modular domain definition)
 
@@ -21,7 +21,7 @@ from pydantic import ValidationError
 
 from kg.config.models import (
     DatabaseSettings,
-    OllamaSettings,
+    LLMSettings,
     Ontology,
     Settings,
 )
@@ -42,6 +42,49 @@ def _settings_yaml_path(root: Path, explicit: Path | str | None) -> Path:
         return Path(explicit)
     user_yaml = root / "config" / "settings.yaml"
     return user_yaml if user_yaml.exists() else root / "config" / "settings.example.yaml"
+
+
+def _build_llm_settings(llm_cfg: dict) -> LLMSettings:
+    """Assemble LLMSettings from env + the YAML ``llm:`` block.
+
+    Env wins where both are set. Every provider — OpenRouter, vLLM, OpenAI,
+    Ollama, ... — is configured identically; the provider name only selects
+    preset defaults (filled by ``kg.llm.factory``), never a code path.
+    """
+    provider = os.getenv("LLM_PROVIDER") or llm_cfg.get("provider") or "openrouter"
+    provider = provider.strip().lower()
+
+    allowed_env = [
+        p.strip() for p in (os.getenv("LLM_ALLOWED_PROVIDERS", "") or "").split(",") if p.strip()
+    ]
+    allowed = allowed_env or [
+        str(p).strip() for p in (llm_cfg.get("allowed_providers") or []) if str(p).strip()
+    ]
+
+    headers = dict(llm_cfg.get("extra_headers") or {})
+    referer = os.getenv("LLM_HTTP_REFERER")
+    if referer:
+        headers["HTTP-Referer"] = referer
+
+    return LLMSettings(
+        provider=provider,
+        model=os.getenv("LLM_MODEL") or llm_cfg.get("model") or "",
+        base_url=os.getenv("LLM_BASE_URL") or llm_cfg.get("base_url") or "",
+        api_key=os.getenv("LLM_API_KEY") or llm_cfg.get("api_key") or "",
+        timeout=float(os.getenv("LLM_TIMEOUT") or llm_cfg.get("timeout") or 120.0),
+        max_retries=int(os.getenv("LLM_MAX_RETRIES") or llm_cfg.get("max_retries") or 2),
+        concurrency=int(os.getenv("LLM_CONCURRENCY") or llm_cfg.get("concurrency") or 8),
+        structured_mode=os.getenv("LLM_STRUCTURED_MODE")
+        or llm_cfg.get("structured_mode")
+        or "auto",
+        allowed_providers=allowed,
+        max_tokens=(
+            int(os.getenv("LLM_MAX_TOKENS"))
+            if os.getenv("LLM_MAX_TOKENS")
+            else llm_cfg.get("max_tokens")
+        ),
+        extra_headers=headers,
+    )
 
 
 def load_settings(
@@ -76,18 +119,14 @@ def load_settings(
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         graph_name=os.getenv("AGE_GRAPH_NAME", "kg_graph"),
     )
-    ollama = OllamaSettings(
-        host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        model=os.getenv("OLLAMA_MODEL", "llama3.1"),
-        timeout=float(os.getenv("OLLAMA_TIMEOUT", "120")),
-    )
+    llm = _build_llm_settings(llm_cfg)
 
     ontology_raw = os.getenv("ONTOLOGY_PATH", "config/ontologies/generic.yaml")
     chunker = os.getenv("CHUNKER") or ingest_cfg.get("chunker") or "structural"
 
     settings = Settings(
         db=db,
-        ollama=ollama,
+        llm=llm,
         ontology_path=Path(ontology_raw),
         chunker=chunker,
         log_level=os.getenv("LOG_LEVEL", "INFO"),

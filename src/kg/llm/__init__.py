@@ -1,5 +1,5 @@
-"""LLM client abstraction. Ollama is one implementation; others are plug-ins."""
+"""LLM client abstraction. One OpenAI-compatible client covers every provider."""
 
-from kg.llm.base import LLMClient
+from kg.llm.base import LLMCallError, LLMClient, LLMError
 
-__all__ = ["LLMClient"]
+__all__ = ["LLMCallError", "LLMClient", "LLMError"]

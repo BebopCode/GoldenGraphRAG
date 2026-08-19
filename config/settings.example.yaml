@@ -1,9 +1,23 @@
 # Application tuning. Connection secrets/hosts live in .env (see .env.example).
 # Copy to settings.yaml and edit, or rely on the defaults below.
+# Env vars (LLM_*) win where they overlap with the llm: block here.
 
 llm:
+  # Endpoint identity normally comes from .env (LLM_PROVIDER/MODEL/BASE_URL/KEY);
+  # these knobs are safe to keep in YAML.
   temperature: 0.0          # deterministic extraction
-  json_mode: true           # ask Ollama for strict JSON output
+  json_mode: true           # ask for strict JSON output (implied by structured mode)
+  timeout: 120              # per-request timeout, seconds
+  max_retries: 2            # SDK-level retries with backoff
+  concurrency: 8            # parallel chunk extractions (threads)
+  # auto: send the JSON schema, degrade if the endpoint rejects it.
+  # json_schema | json_object | none pin the behaviour once you know the endpoint.
+  structured_mode: auto
+  # allowed_providers: [Groq, DeepInfra]   # OpenRouter routing allowlist
+  # max_tokens: 4096                       # cap output tokens
+  # extra_headers:                          # e.g. OpenRouter attribution
+  #   HTTP-Referer: https://example.com
+  #   X-Title: kg-pipeline
 
 ingest:
   chunker: structural        # structural | fixed  (also settable via CHUNKER env)

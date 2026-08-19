@@ -1,4 +1,4 @@
-"""Extractor unit tests with a mocked LLM (no Ollama required)."""
+"""Extractor unit tests with a mocked LLM (no endpoint required)."""
 
 from __future__ import annotations
 
@@ -30,9 +30,20 @@ class MockLLM(LLMClient):
     def __init__(self, responses: list[str]) -> None:
         self.responses = list(responses)
         self.calls = 0
+        self.saw_schema: dict | None = None
 
-    def complete(self, prompt: str, *, system=None, temperature=0.0, format=None) -> str:
+    def complete(
+        self,
+        prompt,
+        *,
+        system=None,
+        temperature=0.0,
+        format=None,
+        json_schema=None,
+        schema_name="extraction",
+    ) -> str:
         self.calls += 1
+        self.saw_schema = json_schema
         if not self.responses:
             return ""
         return self.responses.pop(0)
@@ -146,6 +157,15 @@ def test_persistently_malformed_skips_chunk() -> None:
     result = _ext(client).extract(CHUNK)
     assert result.entities == [] and result.relationships == []
     assert result.chunk_id == "c1"
+
+
+def test_extractor_passes_json_schema_to_client() -> None:
+    client = MockLLM([json.dumps({"entities": [], "relationships": []})])
+    _ext(client).extract(CHUNK)
+    assert client.saw_schema is not None
+    # the schema describes the extraction contract, not the ontology itself
+    assert "entities" in client.saw_schema["properties"]
+    assert "relationships" in client.saw_schema["properties"]
 
 
 def test_schemas_round_trip() -> None:
