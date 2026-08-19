@@ -20,7 +20,7 @@ llm:
   #   X-Title: kg-pipeline
 
 ingest:
-  chunker: structural        # structural | fixed  (also settable via CHUNKER env)
+  chunker: fixed             # fixed | structural (also settable via CHUNKER env)
   fixed:
     chunk_size: 1200         # characters per chunk (fixed chunker only)
     chunk_overlap: 200       # overlap between adjacent chunks

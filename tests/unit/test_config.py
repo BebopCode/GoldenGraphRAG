@@ -97,3 +97,20 @@ def test_llm_settings_redacted_hides_key() -> None:
 def test_yaml_is_valid(generic_ontology_path: Path, constitution_ontology_path: Path) -> None:
     for p in (generic_ontology_path, constitution_ontology_path):
         assert isinstance(yaml.safe_load(p.read_text()), dict)
+
+
+def test_default_chunker_is_fixed(
+    tmp_path: Path, project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pin the shipped default: nothing set in env or YAML -> fixed.
+    monkeypatch.delenv("CHUNKER", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("POSTGRES_USER=u\nPOSTGRES_PASSWORD=p\nPOSTGRES_DB=d\n")
+    settings = load_settings(
+        env_path=env,
+        project_root=project_root,
+        settings_path=project_root / "config" / "settings.example.yaml",
+    )
+    assert settings.chunker == "fixed"
+    assert settings.chunk_size == 1200
+    assert settings.chunk_overlap == 200

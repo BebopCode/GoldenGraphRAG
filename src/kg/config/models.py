@@ -189,7 +189,7 @@ class Settings(BaseModel):
     db: DatabaseSettings
     llm: LLMSettings
     ontology_path: Path
-    chunker: str = "structural"
+    chunker: str = "fixed"
     log_level: str = "INFO"
 
     # tuning

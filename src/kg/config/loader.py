@@ -125,7 +125,7 @@ def load_settings(
     llm = _build_llm_settings(llm_cfg)
 
     ontology_raw = os.getenv("ONTOLOGY_PATH", "config/ontologies/generic.yaml")
-    chunker = os.getenv("CHUNKER") or ingest_cfg.get("chunker") or "structural"
+    chunker = os.getenv("CHUNKER") or ingest_cfg.get("chunker") or "fixed"
 
     settings = Settings(
         db=db,

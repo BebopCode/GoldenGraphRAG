@@ -1,4 +1,4 @@
-"""Chunker implementations: structural (preferred) and fixed-size (fallback)."""
+"""Chunker implementations: fixed-size (default) and structure-aware."""
 
 from kg.ingest.chunkers.base import Chunk, Chunker
 from kg.ingest.chunkers.fixed import FixedChunker
