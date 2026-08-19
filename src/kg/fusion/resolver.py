@@ -130,6 +130,7 @@ class EntityResolver:
         only ever linked a duplicate to itself). Duplicate (src, tgt, label)
         edges are merged, later properties overwriting earlier ones.
         """
+
         def resolve_name(name: str) -> str:
             if name in original_to_canonical:
                 return original_to_canonical[name]

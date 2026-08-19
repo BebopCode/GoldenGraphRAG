@@ -44,7 +44,7 @@ or invalid value fails immediately, never mid-run. There are three inputs:
 | Variable | Default | Description |
 |---|---|---|
 | `ONTOLOGY_PATH` | `config/ontologies/generic.yaml` | Which ontology to extract against |
-| `CHUNKER` | `structural` | `structural \| fixed` |
+| `CHUNKER` | `fixed` | `fixed \| structural` — see [Chunking strategies](#chunking-strategies) |
 | `LOG_LEVEL` | `INFO` | Python logging level |
 
 ## `settings.yaml` reference
@@ -66,10 +66,10 @@ llm:
   #   HTTP-Referer: https://example.com
 
 ingest:
-  chunker: structural       # structural | fixed (CHUNKER env also works)
+  chunker: fixed             # fixed | structural (CHUNKER env also works)
   fixed:
-    chunk_size: 1200        # characters per chunk (fixed chunker only)
-    chunk_overlap: 200      # overlap between adjacent chunks
+    chunk_size: 1200         # characters per chunk (fixed chunker only)
+    chunk_overlap: 200       # overlap between adjacent chunks
 
 extract:
   batch_size: 8             # chunks per progress flush (logging)
@@ -78,6 +78,43 @@ extract:
 fusion:
   use_embeddings: false     # embedding-based dedup (not implemented yet)
 ```
+
+## Chunking strategies
+
+Two chunkers ship with the pipeline; pick one with the `CHUNKER` env var or
+`ingest.chunker` in `settings.yaml`.
+
+### `fixed` (default)
+
+Character windows of `CHUNK_SIZE` (default 1200) with `CHUNK_OVERLAP` (default 200)
+shared between adjacent windows. Windows are trimmed back to the last word boundary,
+so an entity is never cut mid-token.
+
+- **Predictable** — chunk count and size are the same for any document, so prompt
+  sizes (and cost) are bounded up front.
+- **Right for** unstructured text (prose dumps, transcripts, emails) and for keeping
+  prompts safely inside a small model's context window.
+- The overlap gives a statement that straddles a boundary a chance to extract from
+  both sides.
+
+### `structural`
+
+Splits along the document's natural structure — markdown headers first, then a
+heuristic section detector (ALL-CAPS titles like `PREAMBLE`, `Article N` / `Part III`,
+numbered headings). The active heading *path* (e.g. `Part III > Article 21`) rides
+along in each chunk's metadata, so the extractor still knows where a chunk came from.
+
+- **Higher fidelity** — entities and their surrounding context stay on the same side
+  of a chunk boundary, which measurably improves extraction.
+- **Right for** documents with real structure: legal texts, specifications, markdown.
+- **Caveats** — `CHUNK_SIZE` has no effect here (sections are kept whole), so chunk
+  sizes vary, and one huge section becomes one huge chunk. If that bites, switch back
+  to `fixed` or file an issue about exposing the structural chunker's `max_chars` cap
+  in settings.
+
+**Rule of thumb:** start with `fixed` (the default) for bounded, predictable
+behavior; switch to `structural` when your documents have real headings and you
+notice entities being split or losing their context.
 
 ## Multiple configurations
 

@@ -13,6 +13,25 @@ kg init
 Create the AGE graph if it doesn't exist (idempotent — safe on every run) and confirm
 connectivity. Run this once after `docker compose up -d`.
 
+## `kg delete`
+
+```bash
+kg delete [--yes | -y]
+```
+
+Delete the AGE graph and everything in it — every node and edge. **Irreversible.**
+Asks for confirmation first; pass `--yes` to skip the prompt (scripts, CI). Deleting
+a graph that doesn't exist is a no-op, not an error.
+
+| Flag | Description |
+|---|---|
+| `--yes`, `-y` | Delete without asking |
+
+```bash
+kg delete                  # asks "Permanently delete graph 'kg_graph'? ..."
+kg delete --yes            # no prompt
+```
+
 ## `kg ingest`
 
 ```bash

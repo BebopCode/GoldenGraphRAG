@@ -17,8 +17,9 @@ graph in Apache AGE — which runs openCypher *inside* PostgreSQL.
 - **New domain = one YAML file.** The ontology declares the only legal node and
   relationship labels. Swapping domains (Constitution → movies → anything) is an edit
   to that file, never to Python.
-- **Structure-aware chunking.** Documents split along headings and sections, so
-  entities keep their context instead of being cut mid-sentence.
+- **Pluggable chunking.** Fixed-size windows by default, or structure-aware splitting
+  along headings and sections — entities keep their context instead of being cut
+  mid-sentence.
 - **Ontology-constrained extraction.** Off-ontology output is dropped and logged;
   endpoints with structured outputs enforce the schema at decode time.
 - **Entity fusion.** The same real-world entity shows up as "Article 21", "Art. 21",

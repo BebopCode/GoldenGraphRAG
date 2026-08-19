@@ -24,11 +24,13 @@ in the loader registry.
 
 ### 2. Chunk — `kg.ingest.chunkers`
 
-Documents are split along their natural structure — markdown headers first, then a
-heuristic section detector (ALL-CAPS titles, `Article N`, numbered headings). The
-active heading *path* rides along in each chunk's metadata so the extractor still
-knows where a chunk came from. A fixed-size chunker with word-boundary windows and
-overlap is the fallback for unstructured text.
+The default `fixed` chunker slides character windows with overlap over the text,
+trimmed back to word boundaries so entities are never cut mid-token. The
+`structural` chunker instead splits along the document's natural structure —
+markdown headers first, then a heuristic section detector (ALL-CAPS titles,
+`Article N`, numbered headings) — and carries the active heading *path* in each
+chunk's metadata so the extractor still knows where a chunk came from. See
+[Chunking strategies](configuration.md#chunking-strategies) for the trade-offs.
 
 ### 3. Extract — `kg.extract`
 
