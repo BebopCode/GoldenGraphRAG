@@ -177,6 +177,30 @@ def test_non_schema_400_raises_immediately() -> None:
     assert len(fake.calls) == 1  # no retries on a hard 400
 
 
+def test_openrouter_404_routing_refusal_downgrades() -> None:
+    # `:free` endpoints without structured-output support answer
+    # require_parameters with this 404 — the free tier's only dialect.
+    c = _client(provider="openrouter", base_url="https://openrouter.ai/api/v1")
+    err = _status_error(404, "No endpoints found that can handle the requested parameters")
+    fake = _wire(c, [err, _FakeResponse()])
+
+    out = c.complete("p", json_schema=SCHEMA)
+
+    assert out == '{"entities": []}'
+    # OpenRouter skips the vLLM spellings and lands directly on json_object.
+    assert fake.calls[1]["response_format"] == {"type": "json_object"}
+    assert "extra_body" not in fake.calls[1]
+
+
+def test_generic_404_still_raises_immediately() -> None:
+    err = _status_error(404, "Not Found")
+    c = _client(max_retries=3)
+    fake = _wire(c, [err])
+    with pytest.raises(LLMCallError):
+        c.complete("p", json_schema=SCHEMA)
+    assert len(fake.calls) == 1  # a wrong base URL is not a downgrade signal
+
+
 def test_connection_errors_retry_then_raise(monkeypatch) -> None:
     monkeypatch.setattr("kg.llm.openai_compatible.time.sleep", lambda s: None)
     c = _client(max_retries=1)

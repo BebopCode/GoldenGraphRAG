@@ -9,7 +9,11 @@ llm:
   json_mode: true           # ask for strict JSON output (implied by structured mode)
   timeout: 120              # per-request timeout, seconds
   max_retries: 2            # SDK-level retries with backoff
-  concurrency: 8            # parallel chunk extractions (threads)
+  concurrency: 2            # parallel chunk extractions (threads). Stay low on
+                            # hosted APIs — they cap tokens/min by spend tier and
+                            # each extraction is ~1-3k tokens; high concurrency
+                            # 429-storms and skipped chunks follow. Raise only on
+                            # self-hosted endpoints (vLLM: 32 is reasonable).
   # auto: send the JSON schema, degrade if the endpoint rejects it.
   # json_schema | json_object | none pin the behaviour once you know the endpoint.
   structured_mode: auto

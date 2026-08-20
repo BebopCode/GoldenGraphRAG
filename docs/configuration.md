@@ -32,12 +32,13 @@ or invalid value fails immediately, never mid-run. There are three inputs:
 | `LLM_API_KEY` | *(required for hosted)* | API key |
 | `LLM_BASE_URL` | *(preset)* | Must include the `/v1` path |
 | `LLM_MODEL` | *(preset)* | Model slug / served-model-name |
-| `LLM_TIMEOUT` | `120` | Per-request timeout, seconds |
-| `LLM_MAX_RETRIES` | `2` | Retries with backoff |
-| `LLM_CONCURRENCY` | `8` | Parallel chunk extractions |
-| `LLM_STRUCTURED_MODE` | `auto` | `auto \| json_schema \| json_object \| none` |
-| `LLM_MAX_TOKENS` | *(unset)* | Cap output tokens |
-| `LLM_ALLOWED_PROVIDERS` | *(unset)* | OpenRouter routing allowlist, comma-separated |
+| `LLM_TIMEOUT` | `120` | Per-request timeout, seconds — raise for slow reasoning models that think before answering |
+| `LLM_MAX_RETRIES` | `2` | Retries per request on timeout / connection drops / 429 / 5xx, backing off 1/2/4/8s |
+| `LLM_CONCURRENCY` | `2` | Parallel chunk extractions — [keep it low on hosted APIs](#concurrency) |
+| `LLM_STRUCTURED_MODE` | `auto` | `auto \| json_schema \| json_object \| none` — see [structured outputs](providers.md) |
+| `LLM_MAX_TOKENS` | *(unset)* | Cap output tokens; raise if you see `finish_reason=length` warnings (truncated JSON) |
+| `LLM_ALLOWED_PROVIDERS` | *(unset)* | OpenRouter routing allowlist, comma-separated (e.g. `Groq,DeepInfra`) |
+| `LLM_HTTP_REFERER` | *(unset)* | Sent as the `HTTP-Referer` header (OpenRouter attribution) |
 
 ### App
 
@@ -58,7 +59,7 @@ llm:
   json_mode: true
   timeout: 120
   max_retries: 2
-  concurrency: 8
+  concurrency: 2            # see "Concurrency" below before raising
   structured_mode: auto     # auto | json_schema | json_object | none
   # allowed_providers: [Groq, DeepInfra]   # OpenRouter routing allowlist
   # max_tokens: 4096
@@ -78,6 +79,41 @@ extract:
 fusion:
   use_embeddings: false     # embedding-based dedup (not implemented yet)
 ```
+
+## Concurrency
+
+`LLM_CONCURRENCY` (default **2**) sets how many chunks are extracted in
+parallel. The instinct is to raise it — don't, at least not on a hosted API.
+
+**Hosted providers cap tokens per minute, not just requests.** The limit is
+tiered by your org's lifetime spend (e.g. OpenAI Tier 1 gives `gpt-4o`
+500 requests/min but only **30,000 tokens/min**), and the token cap binds
+first: every extraction sends the ontology prompt plus the chunk
+(~1–1.5k tokens) and receives verbose JSON back (~0.5–1.5k tokens), so a
+30k budget is roughly **a dozen requests per minute** total.
+
+High concurrency doesn't go faster past that point — it goes *slower and
+lossier*:
+
+1. Eight workers drain the token budget in seconds → the API answers
+   everything with `429 Too Many Requests`.
+2. The client backs off 1/2/4/8s, but a rate-limit window refills over up to
+   ~60s — retries keep failing.
+3. Retries exhaust → the chunk is **skipped** and logged, not requeued. The
+   run finishes green with a silently incomplete graph.
+
+A concurrency of 2 paces requests near the refill rate of most tiers: no
+wasted 429 round-trips, no skipped chunks, and end-to-end time often barely
+differs because workers aren't parked in retry loops.
+
+**Raise it only when there is no token meter** — a self-hosted vLLM/Ollama
+endpoint (vLLM's continuous batching makes 32 reasonable), or a paid tier
+whose per-minute budget dwarfs your corpus.
+
+**Spotting trouble:** `429` warnings in the log mean back off
+(`LLM_CONCURRENCY=1`, or raise `LLM_MAX_RETRIES`); `LLM call failed
+permanently` errors mean chunks were already skipped — re-run the ingest
+after lowering concurrency.
 
 ## Chunking strategies
 

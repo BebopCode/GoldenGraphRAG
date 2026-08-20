@@ -76,7 +76,7 @@ def _build_llm_settings(llm_cfg: dict) -> LLMSettings:
         api_key=os.getenv("LLM_API_KEY") or llm_cfg.get("api_key") or "",
         timeout=float(os.getenv("LLM_TIMEOUT") or llm_cfg.get("timeout") or 120.0),
         max_retries=int(os.getenv("LLM_MAX_RETRIES") or llm_cfg.get("max_retries") or 2),
-        concurrency=int(os.getenv("LLM_CONCURRENCY") or llm_cfg.get("concurrency") or 8),
+        concurrency=int(os.getenv("LLM_CONCURRENCY") or llm_cfg.get("concurrency") or 2),
         structured_mode=os.getenv("LLM_STRUCTURED_MODE")
         or llm_cfg.get("structured_mode")
         or "auto",

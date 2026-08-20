@@ -140,8 +140,9 @@ class LLMSettings(BaseModel):
     api_key: str = ""
     timeout: float = 120.0
     max_retries: int = 2
-    #: concurrent chunk extractions; 1 reproduces the old serial behaviour
-    concurrency: int = 8
+    #: concurrent chunk extractions; 2 paces requests under hosted tiers'
+    #: per-minute token limits (1 reproduces the old serial behaviour)
+    concurrency: int = 2
     #: how strictly to ask for schema-constrained output:
     #:   auto          try response_format and degrade on rejection (default)
     #:   json_schema   always send response_format=json_schema

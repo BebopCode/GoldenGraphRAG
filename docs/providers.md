@@ -34,9 +34,15 @@ routes the call is `LLM_BASE_URL` + `LLM_MODEL` + `LLM_API_KEY` in `.env`.
         - **Structured-output support is per endpoint, not per model.** The client sets
           `provider.require_parameters = true` whenever a schema is sent, so OpenRouter
           only routes to endpoints that honour `response_format` — without it you can
-          get valid JSON that silently ignores your ontology.
+          get valid JSON that silently ignores your ontology. On models whose *only*
+          endpoint lacks that support (most `:free` tiers, e.g.
+          `nvidia/nemotron-3.5-lightning:free`), the constraint matches nothing and
+          OpenRouter answers `404 No endpoints found`; the client treats that as a
+          rejection and falls back to `json_object` (the schema stays in the prompt).
+          Pin `LLM_STRUCTURED_MODE=json_object` to skip that one probe request per run.
         - **Rate limits (429s) are normal.** The client retries with backoff; keep
-          `LLM_CONCURRENCY` modest (4–8) until you know your account's limits.
+          `LLM_CONCURRENCY` low (the default 2 is a sane start — upstream providers
+          meter tokens per minute, not just requests) until you know your limits.
         - **Prompts transit third-party inference providers.** For sensitive corpora pin
           `LLM_ALLOWED_PROVIDERS` to vendors your legal team approved — or use vLLM.
         - Model slugs can be re-pointed upstream; pin dated slugs where offered to keep

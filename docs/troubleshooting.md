@@ -37,7 +37,8 @@ request and reports wrong base URL / dead key / bad model slug in seconds.
 | 401/403 | Key wrong or out of credit (`openrouter.ai/keys` for OpenRouter) |
 | 404 | `LLM_BASE_URL` is missing the `/v1` path — the loader rejects this at startup for exactly that reason |
 | 404 on the model | `LLM_MODEL` slug is wrong for this provider; check the model page |
-| 429s in the log | Normal on hosted providers; the client retries with backoff. Lower `LLM_CONCURRENCY` (4–8) |
+| 404 `No endpoints found that can handle the requested parameters` | OpenRouter had no endpoint for the model that supports structured outputs (typical for `:free` tiers). The client auto-falls back to `json_object`; the log warning is informational. Pin `LLM_STRUCTURED_MODE=json_object` to skip the probe |
+| 429s in the log | You're hitting your tier's **tokens-per-minute** cap (spend-tier based), not requests. The client retries with backoff; lower `LLM_CONCURRENCY` (2 is the default; 1 if it persists) or raise `LLM_MAX_RETRIES`. `LLM call failed permanently` = chunks were skipped — re-run after lowering |
 | `finish_reason=length` warnings | Output truncated → lossy extraction. Raise `LLM_MAX_TOKENS` / vLLM `--max-model-len`, or shrink `CHUNK_SIZE` |
 | Valid JSON that ignores the ontology | Endpoint silently ignores `response_format`. The OpenRouter client sets `require_parameters` to prevent this; elsewhere, pin `LLM_STRUCTURED_MODE` or switch endpoints |
 

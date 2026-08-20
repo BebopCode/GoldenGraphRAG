@@ -12,8 +12,10 @@ client negotiates it:
     server rejected ``response_format``.
   * ``json_object``  — valid JSON, schema left to the prompt. The floor.
 
-In ``auto`` mode it starts strict and degrades on rejection, remembering the
-mode that worked so the probe costs one request per process, not per chunk.
+In ``auto`` mode it starts strict and degrades on rejection — a 400 from the
+endpoint, or OpenRouter's 404 routing refusal when ``require_parameters`` rules
+out every endpoint for the model — remembering the mode that worked so the
+probe costs one request per process, not per chunk.
 """
 
 from __future__ import annotations
@@ -82,11 +84,12 @@ class OpenAICompatibleLLMClient(LLMClient):
         """Complete the prompt; see :meth:`LLMClient.complete` for the arguments.
 
         Owns the retry policy: transient failures (timeout, connection reset,
-        408/409/425/429, 5xx) are retried with bounded backoff; a 400 that
-        looks like ``response_format`` rejection first downgrades the
-        structured-output mode and retries immediately. Any other 4xx — or
-        exhausting the attempts — raises :class:`LLMCallError` so callers can
-        treat the chunk as poisoned rather than the run as dead.
+        408/409/425/429, 5xx) are retried with bounded backoff; an error that
+        looks like ``response_format`` rejection (400, or OpenRouter's 404
+        routing refusal) first downgrades the structured-output mode and
+        retries immediately. Any other 4xx — or exhausting the attempts —
+        raises :class:`LLMCallError` so callers can treat the chunk as poisoned
+        rather than the run as dead.
         """
         messages: list[ChatCompletionMessageParam] = []
         if system:
@@ -203,25 +206,43 @@ class OpenAICompatibleLLMClient(LLMClient):
     def _downgrade_mode(
         self, mode: str, json_schema: dict[str, Any] | None, exc: APIStatusError
     ) -> str | None:
-        """On a 400 that smells like response_format rejection, weaken the mode.
+        """On an error that smells like response_format rejection, weaken the mode.
+
+        Rejections come in two dialects: a 400 from the endpoint itself, or
+        OpenRouter's 404 "No endpoints found that can handle the requested
+        parameters" when ``require_parameters`` rules out every endpoint for the
+        model (``:free`` tiers frequently lack structured outputs). A bad model
+        ID is a 400 on OpenRouter, so typos still fail fast.
 
         Returns the next mode to try (remembered for the process), or None if
         this error isn't about structured output.
         """
-        if exc.status_code != 400 or json_schema is None:
+        if json_schema is None:
             return None
         body = str(exc).lower()
-        if not any(
-            token in body
-            for token in ("response_format", "json_schema", "structured", "guided", "schema")
-        ):
+        if exc.status_code == 404:
+            if not any(tok in body for tok in ("no endpoints found", "requested parameters")):
+                return None
+        elif exc.status_code == 400:
+            if not any(
+                token in body
+                for token in ("response_format", "json_schema", "structured", "guided", "schema")
+            ):
+                return None
+        else:
             return None
 
-        downgrade = {
-            "json_schema": "vllm_structured_outputs",
-            "vllm_structured_outputs": "vllm_guided_json",
-            "vllm_guided_json": "json_object",
-        }
+        # The vLLM spellings only make sense against vLLM; on OpenRouter they
+        # would just burn two more probe requests before reaching json_object.
+        downgrade = (
+            {"json_schema": "json_object"}
+            if self.settings.provider == "openrouter"
+            else {
+                "json_schema": "vllm_structured_outputs",
+                "vllm_structured_outputs": "vllm_guided_json",
+                "vllm_guided_json": "json_object",
+            }
+        )
         nxt = downgrade.get(mode)
         if nxt is None:
             return None
