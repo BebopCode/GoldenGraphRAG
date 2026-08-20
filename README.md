@@ -41,8 +41,7 @@ cp .env.example .env            # then edit POSTGRES_PASSWORD + LLM_* values
 
 docker compose up -d            # starts PostgreSQL 16 + Apache AGE
 
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .                # installs the `kg` console command
+uv sync && source .venv/bin/activate   # creates .venv + the `kg` console command
 
 kg info --check-llm             # pings the endpoint: bad URL/key/model fails in seconds
 kg init                         # create the AGE graph (idempotent)

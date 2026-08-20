@@ -1,6 +1,7 @@
 # CLI Reference
 
-Everything runs through the `kg` command (installed by `pip install -e .`). Every
+Everything runs through the `kg` command (installed by `uv sync`; run it bare after
+`source .venv/bin/activate`, or as `uv run kg`). Every
 command accepts `--env <file>` to use a different `.env` profile — see
 [Multiple configurations](configuration.md#multiple-configurations).
 

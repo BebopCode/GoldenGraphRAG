@@ -16,15 +16,16 @@ Note that `-v` deletes your graphs.
 
 **Wrong virtualenv**
 
-The repo works with any venv name (`env` and `.venv` are both gitignored), but if you
-created `.venv` while an old `env/` is activated, `which python` will tell you which
-one you're in. The docs standardize on `.venv`.
+uv creates and manages `.venv` — if you have a leftover `env/` or a hand-made
+`.venv` from an earlier setup, `rm -rf env .venv && uv sync` rebuilds a clean one.
+`which python` (or `which kg`) tells you which environment you're currently in;
+activate with `source .venv/bin/activate` after syncing.
 
 **`kg` command not found**
 
-It comes from `pip install -e .` (a console script defined in pyproject). If it's
-missing, you either skipped that step or you're in a different venv than you installed
-into. There is no `python -m kg` fallback.
+It comes from `uv sync` (a console script defined in pyproject). If it's missing,
+you either skipped that step or you're in a different venv than the one uv created.
+Activate with `source .venv/bin/activate` — there is no `python -m kg` fallback.
 
 ## LLM problems
 

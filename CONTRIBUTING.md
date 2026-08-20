@@ -7,8 +7,8 @@ welcome.
 
 ```bash
 git clone https://github.com/BebopCode/GoldenGraphRAG.git && cd GoldenGraphRAG
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,docs]"
+uv sync --all-groups              # runtime + pytest/ruff + mkdocs (creates .venv)
+source .venv/bin/activate         # then kg / pytest / ruff / mkdocs run bare
 cp .env.example .env              # and edit
 docker compose up -d              # AGE container — needed for integration tests
 ```
@@ -28,8 +28,10 @@ for the docs preview loop).
 
 ## Notes
 
-- `pyproject.toml` is the source of truth for dependencies;
-  `requirements*.txt` are pinned snapshots and can lag.
+- `pyproject.toml` declares the dependency floors; `uv.lock` is the committed
+  exact lock. Add deps with `uv add` (or `uv add --group dev` / `--group docs`)
+  and commit the regenerated lock — CI runs `uv sync --locked` and fails if the
+  lock is stale.
 - Keep new stages pluggable: anything swappable goes behind the existing ABCs
   (`LLMClient`, `GraphStore`, `Chunker`) — see the
   [architecture docs](https://bebopcode.github.io/GoldenGraphRAG/architecture/).

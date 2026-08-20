@@ -5,15 +5,17 @@
 ```bash
 git clone https://github.com/BebopCode/GoldenGraphRAG.git
 cd GoldenGraphRAG
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,docs]"      # runtime + pytest/ruff + mkdocs
+uv sync --all-groups              # runtime + pytest/ruff + mkdocs (creates .venv)
+source .venv/bin/activate         # then kg / pytest / ruff / mkdocs run bare
 cp .env.example .env              # and edit
 docker compose up -d              # the AGE container (integration tests need it)
 ```
 
 !!! note
-    The repo historically used a venv directory named `env/`; both `env` and `.venv`
-    are gitignored. `.venv` is the documented convention.
+    uv creates and manages `.venv` automatically on the first `uv sync`. Activate
+    it (`source .venv/bin/activate`) and every tool runs bare, exactly as before
+    the uv migration. If you have a leftover `env/` or a hand-made `.venv` from
+    an earlier setup, you can simply delete it — uv will rebuild a clean one.
 
 ## Project structure
 
@@ -91,7 +93,8 @@ that in mind.
 
 ## Dependency notes
 
-- `pyproject.toml` is the source of truth for dependencies.
-- `requirements.txt` / `requirements-dev.txt` are exactly-pinned snapshots of what
-  the authors tested with — they can lag behind pyproject's floors. If a pin blocks
-  you, install from pyproject and say so in your PR.
+- `pyproject.toml` declares the dependency floors; `uv.lock` is the committed,
+  exact lock — `uv sync --locked` reproduces the environment bit-for-bit.
+- Add a dependency with `uv add <pkg>` (or `uv add --group dev` / `--group docs`);
+  the lock regenerates and gets committed with your change. CI fails if the lock
+  is stale relative to `pyproject.toml`.

@@ -45,7 +45,7 @@ routes the call is `LLM_BASE_URL` + `LLM_MODEL` + `LLM_API_KEY` in `.env`.
 === "vLLM"
 
     ```bash
-    pip install vllm
+    uv tool install vllm    # standalone server — own environment, doesn't touch .venv
     vllm serve Qwen/Qwen3-30B-A3B-Instruct \
       --served-model-name kg-extractor \
       --api-key "$VLLM_API_KEY" \

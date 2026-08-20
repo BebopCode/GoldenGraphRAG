@@ -45,14 +45,16 @@ docker compose ps           # kg-age should show (healthy)
 ## 3. Install
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .            # installs the `kg` console command
+uv sync && source .venv/bin/activate   # creates .venv + the `kg` console command
 ```
 
 !!! tip "Reproducible installs"
-    `pip install -e .` installs from `pyproject.toml` (the source of truth).
-    If you want the exactly-pinned snapshot the authors tested with, run
-    `pip install -r requirements.txt` *instead*, then `pip install -e . --no-deps`.
+    `uv.lock` pins exact versions for every dependency, so `uv sync` gives you
+    the same environment the authors tested with — no extra step needed.
+
+After activating once, every command on this page runs as plain `kg ...` — same
+as before the uv migration. (`uv run kg ...` also works if you'd rather not
+activate.)
 
 ## 4. Sanity-check the setup
 
