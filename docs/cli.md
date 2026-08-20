@@ -2,7 +2,7 @@
 
 Everything runs through the `kg` command (installed by `uv sync`; run it bare after
 `source .venv/bin/activate`, or as `uv run kg`). Every
-command accepts `--env <file>` to use a different `.env` profile — see
+command accepts `--env <file>` to use a different `.env` profile; see
 [Multiple configurations](configuration.md#multiple-configurations).
 
 ## `kg init`
@@ -11,7 +11,7 @@ command accepts `--env <file>` to use a different `.env` profile — see
 kg init
 ```
 
-Create the AGE graph if it doesn't exist (idempotent — safe on every run) and confirm
+Create the AGE graph if it doesn't exist (idempotent, safe on every run) and confirm
 connectivity. Run this once after `docker compose up -d`.
 
 ## `kg delete`
@@ -20,7 +20,7 @@ connectivity. Run this once after `docker compose up -d`.
 kg delete [--yes | -y]
 ```
 
-Delete the AGE graph and everything in it — every node and edge. **Irreversible.**
+Delete the AGE graph and everything in it: every node and edge. **Irreversible.**
 Asks for confirmation first; pass `--yes` to skip the prompt (scripts, CI). Deleting
 a graph that doesn't exist is a no-op, not an error.
 
@@ -39,7 +39,7 @@ kg delete --yes            # no prompt
 kg ingest <path> [--limit N | -n N]
 ```
 
-Run the full pipeline — load → chunk → extract → fuse → store — over a file or
+Run the full pipeline (load → chunk → extract → fuse → store) over a file or
 directory. Supported formats: `.txt`, `.md`, `.json`, `.csv`; directories are walked
 recursively.
 
@@ -68,7 +68,7 @@ clauses are supported.
 kg info [--check-llm]
 ```
 
-Show the effective config and ontology — no database or LLM needed.
+Show the effective config and ontology; no database or LLM needed.
 
 | Flag | Description |
 |---|---|
@@ -88,5 +88,5 @@ kg query "MATCH (n) RETURN labels(n) AS label, count(n) AS n"
 ```
 
 !!! tip
-    Queries are hand-written openCypher — there's no text-to-Cypher layer (yet).
+    Queries are hand-written openCypher; there's no text-to-Cypher layer (yet).
     The [openCypher spec](https://opencypher.org/) covers everything AGE supports.

@@ -14,34 +14,34 @@ flowchart LR
 ## The five stages
 
 Each stage sits behind an interface (`src/kg/`), so any of them can be swapped
-independently — the pipeline composes concrete classes; the flow never changes.
+independently: the pipeline composes concrete classes; the flow never changes.
 
-### 1. Load — `kg.ingest.loaders`
+### 1. Load (`kg.ingest.loaders`)
 
 `.txt` / `.md` / `.json` / `.csv` files become normalized `Document` objects
 (id + text + provenance metadata). Adding a format is a new function plus one line
 in the loader registry.
 
-### 2. Chunk — `kg.ingest.chunkers`
+### 2. Chunk (`kg.ingest.chunkers`)
 
 The default `fixed` chunker slides character windows with overlap over the text,
 trimmed back to word boundaries so entities are never cut mid-token. The
-`structural` chunker instead splits along the document's natural structure —
+`structural` chunker instead splits along the document's natural structure:
 markdown headers first, then a heuristic section detector (ALL-CAPS titles,
-`Article N`, numbered headings) — and carries the active heading *path* in each
+`Article N`, numbered headings), and carries the active heading *path* in each
 chunk's metadata so the extractor still knows where a chunk came from. See
 [Chunking strategies](configuration.md#chunking-strategies) for the trade-offs.
 
-### 3. Extract — `kg.extract`
+### 3. Extract (`kg.extract`)
 
 One LLM call per chunk, with the ontology injected as the *only* legal labels and the
 JSON Schema sent alongside so endpoints with structured outputs can constrain decoding.
-Malformed JSON gets one stricter retry, then the chunk is skipped and logged —
+Malformed JSON gets one stricter retry, then the chunk is skipped and logged;
 extraction is probabilistic, and one poisoned chunk must not kill a long ingest.
 Off-ontology output is dropped and logged. Extraction fans out across threads
 (`LLM_CONCURRENCY`); failures are isolated per chunk.
 
-### 4. Fuse — `kg.fusion`
+### 4. Fuse (`kg.fusion`)
 
 The same real-world entity surfaces under different names across chunks ("Article 21"
 vs "Art. 21"). The resolver normalizes names, groups by the normalized key, picks a
@@ -49,10 +49,10 @@ canonical representative (most frequent surface form, ties to the longest), merg
 properties, and rewires every relationship to canonical names. Identical edges are
 merged; self-loops created by fusion are dropped.
 
-### 5. Store — `kg.store.age_store`
+### 5. Store (`kg.store.age_store`)
 
 Idempotent `MERGE`-based upserts into Apache AGE (openCypher inside PostgreSQL).
-Nodes first — edges `MATCH` their endpoints by name. Reads deserialize AGE's
+Nodes first, edges `MATCH` their endpoints by name. Reads deserialize AGE's
 `agtype` to plain Python values. Writes stay single-threaded by design: the
 MERGE-based upserts are not safe to interleave.
 
@@ -61,14 +61,14 @@ MERGE-based upserts are not safe to interleave.
 Everything pluggable sits behind an abstract base class, so a new implementation is a
 new class plus one line of construction in `pipeline.py`.
 
-**Replace the LLM.** Any OpenAI-compatible endpoint already works with zero code —
+**Replace the LLM.** Any OpenAI-compatible endpoint already works with zero code:
 it's `.env` values. For a provider that *isn't* OpenAI-compatible, implement
 `kg.llm.base.LLMClient` (one method: `complete(...)`, plus optional
 `health_check`/`close`) and register a preset in `kg/llm/factory.py`.
 
 **Replace the store.** Implement `kg.store.base.GraphStore`
 (`init_graph / upsert_node / upsert_edge / query`). A Neo4j store would translate
-those to native Cypher (no `cypher()`-in-SQL wrapper, no `agtype`) — the openCypher
+those to native Cypher (no `cypher()`-in-SQL wrapper, no `agtype`); the openCypher
 query knowledge transfers directly. Construct it in `pipeline.py` instead of
 `AgeGraphStore`.
 

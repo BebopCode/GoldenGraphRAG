@@ -15,7 +15,7 @@ docker compose up -d              # the AGE container (integration tests need it
     uv creates and manages `.venv` automatically on the first `uv sync`. Activate
     it (`source .venv/bin/activate`) and every tool runs bare, exactly as before
     the uv migration. If you have a leftover `env/` or a hand-made `.venv` from
-    an earlier setup, you can simply delete it — uv will rebuild a clean one.
+    an earlier setup, you can simply delete it; uv will rebuild a clean one.
 
 ## Project structure
 
@@ -75,16 +75,16 @@ and served at <https://bebopcode.github.io/GoldenGraphRAG/>.
 
 ```bash
 mkdocs serve                    # live preview at http://127.0.0.1:8000/GoldenGraphRAG/
-mkdocs build --strict           # what CI runs — must exit clean
+mkdocs build --strict           # what CI runs; must exit clean
 ```
 
 !!! note
     The preview serves under the `/GoldenGraphRAG/` subpath (matching the
-    published `site_url`) — the bare `http://127.0.0.1:8000/` root will 404.
+    published `site_url`); the bare `http://127.0.0.1:8000/` root will 404.
 
 !!! warning "Linking to repo files"
     Links from a docs page to files *outside* `docs/` (e.g. `settings.example.yaml`)
-    must be absolute GitHub URLs — relative paths break the strict build and 404 on
+    must be absolute GitHub URLs; relative paths break the strict build and 404 on
     the published site.
 
 An auto-generated API reference ([mkdocstrings](https://mkdocstrings.github.io/))
@@ -94,7 +94,7 @@ that in mind.
 ## Dependency notes
 
 - `pyproject.toml` declares the dependency floors; `uv.lock` is the committed,
-  exact lock — `uv sync --locked` reproduces the environment bit-for-bit.
+  exact lock: `uv sync --locked` reproduces the environment bit-for-bit.
 - Add a dependency with `uv add <pkg>` (or `uv add --group dev` / `--group docs`);
   the lock regenerates and gets committed with your change. CI fails if the lock
   is stale relative to `pyproject.toml`.

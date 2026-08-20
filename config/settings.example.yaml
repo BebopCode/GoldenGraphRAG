@@ -10,7 +10,7 @@ llm:
   timeout: 120              # per-request timeout, seconds
   max_retries: 2            # SDK-level retries with backoff
   concurrency: 2            # parallel chunk extractions (threads). Stay low on
-                            # hosted APIs — they cap tokens/min by spend tier and
+                            # hosted APIs: they cap tokens/min by spend tier and
                             # each extraction is ~1-3k tokens; high concurrency
                             # 429-storms and skipped chunks follow. Raise only on
                             # self-hosted endpoints (vLLM: 32 is reasonable).

@@ -19,7 +19,7 @@ cd GoldenGraphRAG
 cp .env.example .env
 ```
 
-Edit `.env` — at minimum set `POSTGRES_PASSWORD` and your `LLM_API_KEY`:
+Edit `.env`; at minimum set `POSTGRES_PASSWORD` and your `LLM_API_KEY`:
 
 ```bash
 POSTGRES_PASSWORD=choose-one
@@ -50,9 +50,9 @@ uv sync && source .venv/bin/activate   # creates .venv + the `kg` console comman
 
 !!! tip "Reproducible installs"
     `uv.lock` pins exact versions for every dependency, so `uv sync` gives you
-    the same environment the authors tested with — no extra step needed.
+    the same environment the authors tested with, no extra step needed.
 
-After activating once, every command on this page runs as plain `kg ...` — same
+After activating once, every command on this page runs as plain `kg ...`, same
 as before the uv migration. (`uv run kg ...` also works if you'd rather not
 activate.)
 
